@@ -1,37 +1,99 @@
 #!/bin/bash
-#by:xingdd
-#NFS manager script
+#set -x
+#by: xingdd
+#NFS manager script and auto install environment
 #Creat NFS4 server mount point
+#This script only use centos 6+ or RedHat 6 + 
 baseDir=/data
 exPorts=/etc/exports
 formatDate=$(date +%Y-%m-%d\ %H:%M:%S)
+rpcIdmapd=/etc/idmapd.conf
 
-read -p "--Infor: Please enter a server point directory:" Dir
-read -p "--Infor: Please enter a user for client [root|nfsuser]:" InUser
-read -p "--Infor: please enter a client ip or subip like [192.168.1.100|192.168.1.0/24]" Addr
 
+#user check 
+function User_Set(){
+	if grep  "nfs" /etc/group >/dev/null ;then
+		echo "--Infor: NFS user group  has been exist."
+		groupId=$(grep -w "nfs" /etc/group | awk -F':' '{print $3}')
+		if id nfsuser >/dev/null 2>&1;then
+			echo "--Infor: NFS user has been created."
+		else
+			echo "--Infor: NFS user not exist."
+			echo "--Infor: Start create user."	
+			useradd -u 10001 -g ${groupId} nfsuser
+		fi
+	else
+		echo "--Infor: NFS user group not exist."
+		echo "--Infor: Start create nfs group."
+		groupadd -g 10001 nfs
+		if id nfsuser >/dev/null 2>&1;then
+			echo "--Infor: Start change user\'s group."
+			usermod -g nfs nfsuser
+		else
+			echo "--Infor: Start create user and specify group"
+			useradd -g nfs nfsuser
+		fi
+	fi
+
+}
+
+#resolve client user "nobody" problems
+function setrpcIdmap(){
+	if [ -f ${rpcIdmapd} ];then
+		echo "--Infor: Start to set rpcidmap."
+		sleep 2
+		User_Set
+		sed -ie 's/^Nobody-User = nobody/Nobody-User = nfsuser/g;s/^Nobody-Group = nobody/Nobody-Group = nfs/g' ${rpcIdmapd}
+	else
+		echo "--Infor: You did\'t installed rpcbind. please install it. "
+		exit 127
+	fi
+}
+
+# Install NFS Server
+function checkEnvironment(){
+	if  rpm -qa | egrep "(nfs-utils|rpcbind)" >/dev/null 2>&1;then
+		echo "--Infor: NFS Server has been installed."
+	else
+		echo "--Infor: Start install nfs server."		
+		yum install -y nfs-utils rpcbind >/dev/null 2>&1
+		if [ $? -eq 0 ];then
+			echo "--Infor: NFS Server install sucessfully."
+			setrpcIdmap
+		else
+			echo "--Infor: NFS Server install failure."
+		fi
+	fi
+}
 
 #create a mount public point
 function creatPoint(){
+	read -p "--Infor: Please enter a server point directory:" Dir
+	read -p "--Infor: Please enter a user for client [root|nfsuser]:" InUser
+	read -p "--Infor: please enter a client ip or subip like [192.168.1.100|192.168.1.0/24]" Addr
 	if [ -d $baseDir/$Dir ];then
 		echo "--Infor: Your enter poin has been exist"
 		exit 1
 	else
 		echo "--Infor: Start create mount point "
-		mkdir $baseDir/$Dir
+		mkdir -pv $baseDir/$Dir
 		if [ $InUser == "root" ];then
 			if grep -w "$Dir" $exPorts > /dev/null 2>&1;then
 				echo "--Infor: NFS has been set share public point."
+				exit 0
 			else
 				echo "#root share point build date ${formatDate} " >>${exPorts}
 				echo "$baseDir/$Dir $Addr(rw,async,no_root_squash,anonuid=10001,anongid=10001,insecure)" >>${exPorts}
+				exportfs -rv
 			fi
 		elif [ $InUser == "nfsuser" ];then
 			if grep -w "$Dir" $exPorts > /dev/null 2>&1;then
 				echo "--Infor: NFS has been set share public point."
+				exit 0
 			else
 				echo "#root share point build date ${formatDate}" >>${exPorts}
 				echo "$baseDir/$Dir $Addr(rw,async,all_squash,anonuid=10001,anongid=10001,insecure)">>${exPorts}
+				exportfs -rv
 			fi
 		else
 			clear 
@@ -48,4 +110,19 @@ function serManager(){
 	/etc/init.d/rpcbind restart
 	/etc/init.d/nfs restart
 }
-creatPoint
+case $1 in
+	-c|--create)
+			creatPoint
+		;;
+	-r|--restart)
+			serManager
+		;;
+	-i|--install)
+			checkEnvironment
+		;;
+	--help|*)
+			echo "Usage: sh $0 --help "
+			echo "    -c|--create  Create nfs share point."
+			echo "    -r|--restart Restart nfs server."
+			echo "    -i|--install Install nfs server"
+esac
