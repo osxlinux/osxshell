@@ -65,6 +65,13 @@ function checkEnvironment(){
 		fi
 	fi
 }
+#restart server
+function serManager(){
+	/etc/init.d/rpcidmapd restart
+	/etc/init.d/rpcbind restart
+	/etc/init.d/nfs restart
+        return 0
+}
 
 #create a mount public point
 function creatPoint(){
@@ -84,7 +91,11 @@ function creatPoint(){
 			else
 				echo "#root share point build date ${formatDate} " >>${exPorts}
 				echo "$baseDir/$Dir $Addr(rw,async,no_root_squash,anonuid=10001,anongid=10001,insecure)" >>${exPorts}
-				exportfs -rv
+				if serManager >/dev/null 2>&1;then
+					exportfs -rv
+				else
+					echo "--Infor: NFS Server start failed!"
+				fi
 			fi
 		elif [ $InUser == "nfsuser" ];then
 			if grep -w "$Dir" $exPorts > /dev/null 2>&1;then
@@ -93,7 +104,11 @@ function creatPoint(){
 			else
 				echo "#root share point build date ${formatDate}" >>${exPorts}
 				echo "$baseDir/$Dir $Addr(rw,async,all_squash,anonuid=10001,anongid=10001,insecure)">>${exPorts}
-				exportfs -rv
+				if serManager >/dev/null 2>&1;then
+					exportfs -rv
+				else
+					echo "--Infor: NFS Server start failed!"
+				fi
 			fi
 		else
 			clear 
@@ -104,12 +119,6 @@ function creatPoint(){
 	fi	
 }
 
-#restart server
-function serManager(){
-	/etc/init.d/rpcidmapd restart
-	/etc/init.d/rpcbind restart
-	/etc/init.d/nfs restart
-}
 case $1 in
 	-c|--create)
 			creatPoint
