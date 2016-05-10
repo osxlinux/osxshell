@@ -73,9 +73,51 @@ function serManager(){
         return 0
 }
 
+function useridset () {
+	if [ $1 == 'root' ];then
+
+		if id nfsnobody >/dev/null 2>&1;then
+			NFSUID=$(grep nfsnobody /etc/passwd | awk -F':' '{print $3}')
+			NFSGID=$(grep nfsnobody /etc/passwd | awk -F':' '{print $4}')
+			echo "# $1 share point build date ${formatDate} " >>${exPorts}
+			echo "$baseDir/$Dir $Addr(rw,async,no_root_squash,anonuid=${NFSUID},anongid=${NFSGID},insecure)" >>${exPorts}
+		else
+			NFSUID=2001
+			NFSGID=2001
+			grouadd -g $NFSGID nfsnobody
+			useradd -g $NFSGID -M -s /sbin/nologin -u $NFSUID nfsnobody
+			echo  nfsnobody:'FUCKabc' | chpasswd
+			echo "# $1 share point build date ${formatDate} " >>${exPorts}
+			echo "$baseDir/$Dir $Addr(rw,async,no_root_squash,anonuid=${NFSUID},anongid=${NFSGID},insecure)" >>${exPorts}
+			
+		fi
+	elif [ $1 == 'nfsuser' ];then
+		
+		if id nfsnobody >/dev/null 2>&1;then
+			NFSUID=$(grep nfsnobody /etc/passwd | awk -F':' '{print $3}')
+			NFSGID=$(grep nfsnobody /etc/passwd | awk -F':' '{print $4}')
+			echo "# $1 share point build date ${formatDate}" >>${exPorts}
+			echo "$baseDir/$Dir $Addr(rw,async,all_squash,anonuid=${NFSUID},anongid=${NFSGID},insecure)">>${exPorts}
+		else
+			NFSUID=2001
+			NFSGID=2001
+			grouadd -g $NFSGID nfsnobody
+			useradd -g $NFSGID -M -s /sbin/nologin -u $NFSUID nfsnobody
+			echo  nfsnobody:'FUCKabc' | chpasswd
+			echo "# $1 share point build date ${formatDate} " >>${exPorts}
+			echo "$baseDir/$Dir $Addr(rw,async,all_squash,anonuid=${NFSUID},anongid=${NFSGID},insecure)">>${exPorts}
+		fi
+		
+	else
+		echo "--Infor: Fuck your father 。Don\'t running it like this."
+	fi
+
+}
+
+
 #create a mount public point
 function creatPoint(){
-	read -p "--Infor: Please enter a server point directory:" Dir
+	read -p "--Infor: Please enter a server point directory like abcdirectory:" Dir
 	read -p "--Infor: Please enter a user for client [root|nfsuser]:" InUser
 	read -p "--Infor: please enter a client ip or subip like [192.168.1.100|192.168.1.0/24]" Addr
 	if [ -d $baseDir/$Dir ];then
@@ -89,8 +131,7 @@ function creatPoint(){
 				echo "--Infor: NFS has been set share public point."
 				exit 0
 			else
-				echo "#root share point build date ${formatDate} " >>${exPorts}
-				echo "$baseDir/$Dir $Addr(rw,async,no_root_squash,anonuid=10001,anongid=10001,insecure)" >>${exPorts}
+				useridset $InUser
 				if serManager >/dev/null 2>&1;then
 					exportfs -rv
 				else
@@ -102,8 +143,7 @@ function creatPoint(){
 				echo "--Infor: NFS has been set share public point."
 				exit 0
 			else
-				echo "#root share point build date ${formatDate}" >>${exPorts}
-				echo "$baseDir/$Dir $Addr(rw,async,all_squash,anonuid=10001,anongid=10001,insecure)">>${exPorts}
+				useridset $InUser
 				if serManager >/dev/null 2>&1;then
 					exportfs -rv
 				else
